@@ -262,19 +262,6 @@ export function Layout() {
           </Link>
 
           <div className="header-actions">
-            <Link
-              to="/clinch/naz"
-              className="header-icon"
-              aria-label="Cuenta"
-              title="Cuenta"
-            >
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-                <path
-                  fill="currentColor"
-                  d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12zm0 2.25c-4 0-7.5 2-7.5 4.5V21h15v-2.25c0-2.5-3.5-4.5-7.5-4.5z"
-                />
-              </svg>
-            </Link>
             <button
               type="button"
               className="header-icon"

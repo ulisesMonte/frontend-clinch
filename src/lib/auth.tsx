@@ -10,12 +10,22 @@ import {
 import { api } from './api';
 import type { User } from './types';
 
+type OtpChallenge = {
+  requiresOtp: true;
+  challengeId: string;
+  otpSentTo: string;
+  /** Only present when EMAIL_PROVIDER=console or Resend fallback */
+  devCode?: string;
+  notice?: string;
+};
+
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
-  login: (
-    email: string,
-    password: string,
+  login: (email: string, password: string) => Promise<OtpChallenge>;
+  verifyOtp: (
+    challengeId: string,
+    code: string,
   ) => Promise<{ user: User; adminBootstrap?: unknown }>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -50,9 +60,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshMe]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post('/auth/login', { email, password });
+    const { data } = await api.post<OtpChallenge>('/auth/login', {
+      email,
+      password,
+    });
+    return data;
+  }, []);
+
+  const verifyOtp = useCallback(async (challengeId: string, code: string) => {
+    const { data } = await api.post<{
+      user: User;
+      adminBootstrap?: unknown;
+    }>('/auth/login/otp', { challengeId, code });
     setUser(data.user);
-    return data as { user: User; adminBootstrap?: unknown };
+    return data;
   }, []);
 
   const logout = useCallback(async () => {
@@ -69,11 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       login,
+      verifyOtp,
       logout,
       refreshMe,
       isAdmin: user?.role === 'ADMIN',
     }),
-    [user, loading, login, logout, refreshMe],
+    [user, loading, login, verifyOtp, logout, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
