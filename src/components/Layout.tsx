@@ -23,7 +23,9 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const storefront = useQuery(storefrontQueryOptions());
-  const categories = storefront.data?.categories ?? [];
+  const categories = (storefront.data?.categories ?? []).filter(
+    (c) => !c.parentId,
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const navId = useId();

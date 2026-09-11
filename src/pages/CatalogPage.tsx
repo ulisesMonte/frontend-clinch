@@ -75,7 +75,11 @@ export function CatalogPage() {
     staleTime: 30_000,
   });
 
-  const categories = storefront.data?.categories ?? [];
+  // Solo categorías raíz en la barra principal (nunca subcategorías).
+  const rootCategories = (storefront.data?.categories ?? []).filter(
+    (c) => !c.parentId,
+  );
+
   const products: ProductList | undefined = filtered
     ? filteredProducts.data
     : storefront.data?.products;
@@ -84,12 +88,30 @@ export function CatalogPage() {
     : storefront.isPending && !products?.items?.length;
   const items = products?.items ?? [];
 
-  const activeCategory = categories.find((c) => c.slug === category);
-  const subcategories = activeCategory?.children ?? [];
-  const showSubsections = Boolean(category && !q && subcategories.length);
-  const subsections = showSubsections
-    ? groupBySubcategory(items, subcategories)
+  const guantes = rootCategories.find((c) => c.slug === 'guantes');
+  const gloveSubs = guantes?.children ?? [];
+  const isGloveSub = gloveSubs.some((c) => c.slug === category);
+  const isGuantesView = category === 'guantes' || isGloveSub;
+  const showGloveButtons = isGuantesView && gloveSubs.length > 0 && !q;
+
+  // Con "Guantes" (todos): secciones. Con un sub-botón: grilla filtrada.
+  const showSections =
+    showGloveButtons && category === 'guantes' && !isGloveSub;
+  const subsections = showSections
+    ? groupBySubcategory(items, gloveSubs)
     : [];
+
+  function setCategory(slug?: string) {
+    const next = new URLSearchParams(params);
+    if (slug) next.set('category', slug);
+    else next.delete('category');
+    setParams(next);
+  }
+
+  function isMainChipActive(slug: string) {
+    if (slug === 'guantes') return isGuantesView;
+    return category === slug;
+  }
 
   return (
     <section className="section catalog-page info-theme-catalog">
@@ -139,29 +161,47 @@ export function CatalogPage() {
           <button
             type="button"
             className={`chip${!category ? ' active' : ''}`}
-            onClick={() => {
-              const next = new URLSearchParams(params);
-              next.delete('category');
-              setParams(next);
-            }}
+            onClick={() => setCategory()}
           >
             Todos
           </button>
-          {categories.map((cat) => (
+          {rootCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
-              className={`chip${category === cat.slug ? ' active' : ''}`}
-              onClick={() => {
-                const next = new URLSearchParams(params);
-                next.set('category', cat.slug);
-                setParams(next);
-              }}
+              className={`chip${isMainChipActive(cat.slug) ? ' active' : ''}`}
+              onClick={() => setCategory(cat.slug)}
             >
               {cat.name}
             </button>
           ))}
         </div>
+
+        {showGloveButtons ? (
+          <div
+            className="filter-bar filter-bar-sub"
+            role="tablist"
+            aria-label="Tipo de guantes"
+          >
+            <button
+              type="button"
+              className={`chip chip-sub${category === 'guantes' ? ' active' : ''}`}
+              onClick={() => setCategory('guantes')}
+            >
+              Todos los guantes
+            </button>
+            {gloveSubs.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                className={`chip chip-sub${category === sub.slug ? ' active' : ''}`}
+                onClick={() => setCategory(sub.slug)}
+              >
+                {sub.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {isLoading ? (
           <div className="product-grid catalog-grid">
@@ -169,7 +209,7 @@ export function CatalogPage() {
               <div key={i} className="skeleton product-card-skel" aria-hidden />
             ))}
           </div>
-        ) : showSubsections && subsections.length ? (
+        ) : showSections && subsections.length ? (
           <div className="catalog-subsections">
             {subsections.map(({ section, products: sectionProducts }) => (
               <section

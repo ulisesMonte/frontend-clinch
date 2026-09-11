@@ -1499,6 +1499,18 @@ h3 {
   background: rgba(193, 18, 31, 0.12);
 }
 
+.filter-bar-sub {
+  margin-top: -0.15rem;
+  margin-bottom: 0.85rem;
+  padding-top: 0.15rem;
+}
+
+.chip-sub {
+  font-size: 0.74rem;
+  padding: 0.45rem 0.8rem;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
 .catalog-subsections {
   display: flex;
   flex-direction: column;
