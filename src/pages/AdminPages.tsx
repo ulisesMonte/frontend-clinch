@@ -31,6 +31,7 @@ export function AdminLayout() {
         </NavLink>
         <NavLink to="/admin/productos">Publicaciones</NavLink>
         <NavLink to="/admin/stock">Stock</NavLink>
+        <NavLink to="/admin/cuenta">Cuenta</NavLink>
         <Link to="/">Volver a tienda</Link>
         <button
           className="btn btn-ghost"
@@ -255,8 +256,20 @@ export function AdminProductsPage() {
         active: true,
       });
 
-      for (const img of pendingImages) {
-        await uploadProductImage(created.id, img.file);
+      try {
+        for (const img of pendingImages) {
+          await uploadProductImage(created.id, img.file);
+        }
+      } catch (imgErr) {
+        setError(
+          apiErrorMessage(
+            imgErr,
+            'Producto creado, pero falló la subida de imágenes al storage',
+          ),
+        );
+        await qc.invalidateQueries({ queryKey: ['admin-products'] });
+        invalidateStorefront();
+        return;
       }
 
       clearPendingImages();
@@ -357,7 +370,7 @@ export function AdminProductsPage() {
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <strong>Imágenes</strong>
             <span className="muted" style={{ fontSize: '0.82rem' }}>
-              JPG, PNG o WebP · máx. 5MB · hasta 8
+              Se guardan en Supabase Storage · JPG/PNG/WebP · máx. 5MB · hasta 8
             </span>
           </div>
           <label className="admin-images-drop">
@@ -920,6 +933,128 @@ export function AdminStockPage() {
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+export function AdminAccountPage() {
+  const { user, refreshMe } = useAuth();
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [ok, setOk] = useState('');
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (user?.email) setEmail(user.email);
+  }, [user?.email]);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    setOk('');
+    if (newPassword && newPassword !== confirmPassword) {
+      setError('La nueva contraseña no coincide');
+      return;
+    }
+    setPending(true);
+    try {
+      const payload: {
+        currentPassword: string;
+        email?: string;
+        newPassword?: string;
+      } = { currentPassword };
+      if (email.trim() && email.trim().toLowerCase() !== user?.email) {
+        payload.email = email.trim();
+      }
+      if (newPassword) payload.newPassword = newPassword;
+      await api.patch('/admin/account', payload);
+      await refreshMe();
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setOk(
+        'Cuenta actualizada. La contraseña se guarda hasheada (bcrypt) en la DB.',
+      );
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { data?: { message?: string | string[] } };
+      };
+      const msg = axiosErr.response?.data?.message;
+      setError(
+        Array.isArray(msg)
+          ? msg.join(', ')
+          : msg
+            ? String(msg)
+            : 'No se pudo actualizar',
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="stack admin-page-enter">
+      <div className="section-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h2>Cuenta admin</h2>
+          <p>
+            Email y contraseña viven en Supabase (tabla <code>User</code>). La
+            pass nunca se guarda en texto plano: solo el hash bcrypt.
+          </p>
+        </div>
+      </div>
+
+      <form className="panel form" onSubmit={(e) => void onSubmit(e)}>
+        <label>
+          Email de login / OTP
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+          />
+        </label>
+        <label>
+          Contraseña actual
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="current-password"
+          />
+        </label>
+        <label>
+          Nueva contraseña (opcional)
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={8}
+            autoComplete="new-password"
+          />
+        </label>
+        <label>
+          Confirmar nueva contraseña
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={8}
+            autoComplete="new-password"
+          />
+        </label>
+        {error ? <p className="error">{error}</p> : null}
+        {ok ? <p className="muted">{ok}</p> : null}
+        <button className="btn btn-primary" type="submit" disabled={pending}>
+          {pending ? 'Guardando...' : 'Guardar'}
+        </button>
+      </form>
     </div>
   );
 }

@@ -31,6 +31,9 @@ const AdminProductsPage = lazy(() =>
 const AdminStockPage = lazy(() =>
   import('./pages/AdminPages').then((m) => ({ default: m.AdminStockPage })),
 );
+const AdminAccountPage = lazy(() =>
+  import('./pages/AdminPages').then((m) => ({ default: m.AdminAccountPage })),
+);
 
 function PageLoader() {
   return (
@@ -64,6 +67,7 @@ export default function App() {
           <Route index element={<AdminDashboardPage />} />
           <Route path="productos" element={<AdminProductsPage />} />
           <Route path="stock" element={<AdminStockPage />} />
+          <Route path="cuenta" element={<AdminAccountPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
