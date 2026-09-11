@@ -13,6 +13,9 @@ export type Category = {
   name: string;
   slug: string;
   description?: string | null;
+  parentId?: string | null;
+  sortOrder?: number;
+  children?: Category[];
 };
 
 export type ProductImage = {

@@ -1499,6 +1499,30 @@ h3 {
   background: rgba(193, 18, 31, 0.12);
 }
 
+.catalog-subsections {
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
+  margin-top: 1.35rem;
+}
+
+.catalog-subsection-head {
+  margin-bottom: 1.1rem;
+}
+
+.catalog-subsection-head h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 3.4vw, 2.15rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.catalog-subsection-head p {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  max-width: 36rem;
+}
+
 .search-bar {
   display: flex;
   gap: 0.65rem;

@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
-import type { Product } from '../lib/types';
+import type { Category, Product } from '../lib/types';
 import { storefrontQueryOptions } from '../lib/storefront';
 
 type ProductList = {
@@ -12,6 +12,43 @@ type ProductList = {
   limit: number;
   pages: number;
 };
+
+function groupBySubcategory(
+  items: Product[],
+  children: Category[],
+): { section: Category; products: Product[] }[] {
+  const bySlug = new Map(children.map((c) => [c.slug, [] as Product[]]));
+  const leftovers: Product[] = [];
+
+  for (const product of items) {
+    const slug = product.category?.slug;
+    if (slug && bySlug.has(slug)) {
+      bySlug.get(slug)!.push(product);
+    } else {
+      leftovers.push(product);
+    }
+  }
+
+  const sections = children
+    .map((section) => ({
+      section,
+      products: bySlug.get(section.slug) ?? [],
+    }))
+    .filter((g) => g.products.length > 0);
+
+  if (leftovers.length) {
+    sections.push({
+      section: {
+        id: 'otros',
+        name: 'Otros',
+        slug: 'otros',
+      },
+      products: leftovers,
+    });
+  }
+
+  return sections;
+}
 
 export function CatalogPage() {
   const [params, setParams] = useSearchParams();
@@ -28,7 +65,7 @@ export function CatalogPage() {
         params: {
           q: q || undefined,
           category: category || undefined,
-          limit: 24,
+          limit: 50,
           includeTotal: false,
         },
       });
@@ -46,6 +83,13 @@ export function CatalogPage() {
     ? filteredProducts.isPending
     : storefront.isPending && !products?.items?.length;
   const items = products?.items ?? [];
+
+  const activeCategory = categories.find((c) => c.slug === category);
+  const subcategories = activeCategory?.children ?? [];
+  const showSubsections = Boolean(category && !q && subcategories.length);
+  const subsections = showSubsections
+    ? groupBySubcategory(items, subcategories)
+    : [];
 
   return (
     <section className="section catalog-page info-theme-catalog">
@@ -123,6 +167,30 @@ export function CatalogPage() {
           <div className="product-grid catalog-grid">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="skeleton product-card-skel" aria-hidden />
+            ))}
+          </div>
+        ) : showSubsections && subsections.length ? (
+          <div className="catalog-subsections">
+            {subsections.map(({ section, products: sectionProducts }) => (
+              <section
+                key={section.id}
+                className="catalog-subsection"
+                aria-labelledby={`subcat-${section.slug}`}
+              >
+                <header className="catalog-subsection-head">
+                  <h2 id={`subcat-${section.slug}`}>{section.name}</h2>
+                  {section.description ? <p>{section.description}</p> : null}
+                </header>
+                <div className="product-grid catalog-grid">
+                  {sectionProducts.map((product, index) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      index={index}
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         ) : items.length ? (

@@ -34,29 +34,24 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function hasSessionFlag() {
-  return document.cookie
-    .split(';')
-    .some((part) => part.trim().startsWith('clinch_has_session='));
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshMe = useCallback(async () => {
-    if (!hasSessionFlag()) {
+    // Always hit /auth/me. The session cookie is httpOnly on the API host
+    // (often another origin: Vercel → Render), so document.cookie cannot see it.
+    // hasSessionFlag() is only a same-origin hint and must not gate restore.
+    try {
+      const { data } = await api.get<User>('/auth/me');
+      setUser(data);
+    } catch {
       setUser(null);
-      return;
     }
-    const { data } = await api.get<User>('/auth/me');
-    setUser(data);
   }, []);
 
   useEffect(() => {
-    refreshMe()
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    void refreshMe().finally(() => setLoading(false));
   }, [refreshMe]);
 
   const login = useCallback(async (email: string, password: string) => {
