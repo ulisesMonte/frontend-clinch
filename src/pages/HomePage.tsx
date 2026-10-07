@@ -31,7 +31,6 @@ export function HomePage() {
             src="/hero/ring.jpg"
             alt=""
             decoding="async"
-            fetchPriority="high"
           />
         </div>
         <div className="hero-plane-watermark" aria-hidden="true" />

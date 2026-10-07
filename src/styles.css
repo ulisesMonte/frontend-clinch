@@ -1511,11 +1511,13 @@ h3 {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
-.catalog-subsections {
-  display: flex;
-  flex-direction: column;
-  gap: 2.75rem;
-  margin-top: 1.35rem;
+.catalog-grid-span {
+  grid-column: 1 / -1;
+  margin: 1.5rem 0 0;
+}
+
+.catalog-grid-span:first-child {
+  margin-top: 0;
 }
 
 .catalog-subsection-head {

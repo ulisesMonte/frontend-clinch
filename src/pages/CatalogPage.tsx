@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
@@ -12,6 +13,37 @@ type ProductList = {
   limit: number;
   pages: number;
 };
+
+/** Parent chip includes its subcategories (Guantes → boxeo, MMA, …). */
+function slugsForCategory(categories: Category[], slug: string) {
+  const slugs = new Set<string>([slug]);
+  const walk = (nodes: Category[]) => {
+    for (const node of nodes) {
+      if (node.slug === slug) {
+        for (const child of node.children ?? []) slugs.add(child.slug);
+      }
+      if (node.children?.length) walk(node.children);
+    }
+  };
+  walk(categories);
+  return slugs;
+}
+
+function filterCatalog(
+  items: Product[],
+  categories: Category[],
+  category: string,
+  q: string,
+) {
+  const query = q.trim().toLowerCase();
+  const allowed = category ? slugsForCategory(categories, category) : null;
+  return items.filter((product) => {
+    if (allowed && !allowed.has(product.category?.slug ?? '')) return false;
+    if (!query) return true;
+    const haystack = `${product.name} ${product.description ?? ''}`.toLowerCase();
+    return haystack.includes(query);
+  });
+}
 
 function groupBySubcategory(
   items: Product[],
@@ -54,9 +86,21 @@ export function CatalogPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const category = params.get('category') ?? '';
-  const filtered = Boolean(q || category);
 
   const storefront = useQuery(storefrontQueryOptions());
+  const cachedItems = storefront.data?.products.items ?? [];
+  const categories = storefront.data?.categories ?? [];
+  const localItems = useMemo(
+    () => filterCatalog(cachedItems, categories, category, q),
+    [cachedItems, categories, category, q],
+  );
+
+  // Bootstrap is one page. A full page may hide older products, so a text
+  // search still asks the API. Category chips use the list already on screen.
+  const cacheMayBePartial =
+    cachedItems.length > 0 &&
+    cachedItems.length >= (storefront.data?.products.limit ?? cachedItems.length);
+  const needsNetwork = Boolean(q) && cacheMayBePartial;
 
   const filteredProducts = useQuery({
     queryKey: ['products', q, category],
@@ -71,22 +115,26 @@ export function CatalogPage() {
       });
       return data;
     },
-    enabled: filtered,
+    enabled: needsNetwork,
     staleTime: 30_000,
+    placeholderData: localItems.length
+      ? {
+          items: localItems,
+          total: localItems.length,
+          page: 1,
+          limit: localItems.length,
+          pages: 1,
+        }
+      : undefined,
   });
 
   // Solo categorías raíz en la barra principal (nunca subcategorías).
-  const rootCategories = (storefront.data?.categories ?? []).filter(
-    (c) => !c.parentId,
-  );
+  const rootCategories = categories.filter((c) => !c.parentId);
 
-  const products: ProductList | undefined = filtered
-    ? filteredProducts.data
-    : storefront.data?.products;
-  const isLoading = filtered
-    ? filteredProducts.isPending
-    : storefront.isPending && !products?.items?.length;
-  const items = products?.items ?? [];
+  const items = needsNetwork
+    ? (filteredProducts.data?.items ?? localItems)
+    : localItems;
+  const isLoading = storefront.isPending && !cachedItems.length && !items.length;
 
   const guantes = rootCategories.find((c) => c.slug === 'guantes');
   const gloveSubs = guantes?.children ?? [];
@@ -209,35 +257,24 @@ export function CatalogPage() {
               <div key={i} className="skeleton product-card-skel" aria-hidden />
             ))}
           </div>
-        ) : showSections && subsections.length ? (
-          <div className="catalog-subsections">
-            {subsections.map(({ section, products: sectionProducts }) => (
-              <section
-                key={section.id}
-                className="catalog-subsection"
-                aria-labelledby={`subcat-${section.slug}`}
-              >
-                <header className="catalog-subsection-head">
-                  <h2 id={`subcat-${section.slug}`}>{section.name}</h2>
-                  {section.description ? <p>{section.description}</p> : null}
-                </header>
-                <div className="product-grid catalog-grid">
-                  {sectionProducts.map((product, index) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      index={index}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
         ) : items.length ? (
           <div className="product-grid catalog-grid">
-            {items.map((product, index) => (
-              <ProductCard key={product.id} product={product} index={index} />
-            ))}
+            {showSections && subsections.length
+              ? subsections.flatMap(({ section, products: sectionProducts }) => [
+                  <header
+                    key={`head-${section.id}`}
+                    className="catalog-subsection-head catalog-grid-span"
+                  >
+                    <h2 id={`subcat-${section.slug}`}>{section.name}</h2>
+                    {section.description ? <p>{section.description}</p> : null}
+                  </header>,
+                  ...sectionProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  )),
+                ])
+              : items.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
           </div>
         ) : (
           <div className="empty-state">

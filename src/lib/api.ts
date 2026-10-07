@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 /** Origin of the API host (for /uploads when front and API are on different domains). */
-function apiOrigin(): string | null {
+export function apiOrigin(): string | null {
   if (!API_URL.startsWith('http')) return null;
   try {
     return new URL(API_URL).origin;
@@ -33,6 +33,16 @@ export function assetUrl(path?: string | null) {
     return origin ? `${origin}${path}` : path;
   }
   return path;
+}
+
+/** Same pixel size for every image in a slot, so the browser fetches them in parallel. */
+export type ImageSlot = 320 | 640 | 1280;
+
+export function imageUrl(path: string | null | undefined, width: ImageSlot) {
+  const url = assetUrl(path);
+  if (!url.includes('/storage/v1/object/public/product-images/')) return url;
+  const base = API_URL.replace(/\/$/, '');
+  return `${base}/media?src=${encodeURIComponent(url)}&w=${width}`;
 }
 
 export function formatMoney(value: number | string) {

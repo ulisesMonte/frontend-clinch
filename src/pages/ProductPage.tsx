@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, assetUrl } from '../lib/api';
+import { api, imageUrl } from '../lib/api';
 import type { Product } from '../lib/types';
 import { PriceBlock } from '../lib/pricing';
 import { whatsappConsultUrl } from '../lib/whatsapp';
@@ -58,9 +58,10 @@ export function ProductPage() {
           <div className="product-gallery">
             <div className="product-hero-media">
               <img
-                src={assetUrl(current?.url)}
+                src={imageUrl(current?.url, 1280)}
                 alt={current?.alt || product.name}
                 key={current?.id ?? 'fallback'}
+                decoding="async"
               />
             </div>
             {images.length > 1 && (
@@ -79,12 +80,7 @@ export function ProductPage() {
                     aria-label={`Foto ${index + 1}`}
                     aria-pressed={index === activeImage}
                   >
-                    <img
-                      src={assetUrl(img.url)}
-                      alt=""
-                      loading={index < 4 ? 'eager' : 'lazy'}
-                      decoding="async"
-                    />
+                    <img src={imageUrl(img.url, 320)} alt="" decoding="async" />
                   </button>
                 ))}
               </div>

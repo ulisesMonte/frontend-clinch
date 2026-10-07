@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, assetUrl } from '../lib/api';
+import { api, imageUrl } from '../lib/api';
 import type { Category, Product } from '../lib/types';
 import { useAuth } from '../lib/auth';
 import { invalidateStorefront } from '../lib/storefront';
@@ -548,7 +548,7 @@ export function AdminProductsPage() {
               <div className="admin-images-grid">
                 {editing.images.map((img, index) => (
                   <div key={img.id} className="admin-image-thumb">
-                    <img src={assetUrl(img.url)} alt={img.alt || editing.name} />
+                    <img src={imageUrl(img.url, 640)} alt={img.alt || editing.name} />
                     {index === 0 && (
                       <span className="admin-image-badge">Principal</span>
                     )}
@@ -633,7 +633,7 @@ export function AdminProductsPage() {
               <tr key={p.id}>
                 <td>
                   <img
-                    src={assetUrl(p.images[0]?.url)}
+                    src={imageUrl(p.images[0]?.url, 320)}
                     alt={p.name}
                     style={{ width: 48, height: 48, objectFit: 'cover' }}
                   />
@@ -830,7 +830,7 @@ export function AdminStockPage() {
                   <tr key={p.id}>
                     <td>
                       <img
-                        src={assetUrl(p.images[0]?.url)}
+                        src={imageUrl(p.images[0]?.url, 320)}
                         alt={p.name}
                         style={{ width: 48, height: 48, objectFit: 'cover' }}
                       />

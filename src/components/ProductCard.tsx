@@ -1,22 +1,19 @@
 import { Link } from 'react-router-dom';
-import { assetUrl } from '../lib/api';
+import { imageUrl } from '../lib/api';
 import { PriceBlock } from '../lib/pricing';
 import type { Product } from '../lib/types';
 
 type ProductCardProps = {
   product: Product;
-  index?: number;
 };
 
-export function ProductCard({ product, index = 0 }: ProductCardProps) {
+export function ProductCard({ product }: ProductCardProps) {
   return (
     <article className="product-card">
       <Link to={`/producto/${product.slug}`} className="product-card-media">
         <img
-          src={assetUrl(product.images[0]?.url)}
+          src={imageUrl(product.images[0]?.url, 640)}
           alt={product.name}
-          loading={index === 0 ? 'eager' : 'lazy'}
-          fetchPriority={index === 0 ? 'high' : 'low'}
           decoding="async"
         />
         {product.featured ? (
