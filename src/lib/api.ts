@@ -35,14 +35,11 @@ export function assetUrl(path?: string | null) {
   return path;
 }
 
-/** Same pixel size for every image in a slot, so the browser fetches them in parallel. */
+/** Kept so call sites can name the slot. Photos are served from storage, not resized by the API. */
 export type ImageSlot = 320 | 640 | 1280;
 
-export function imageUrl(path: string | null | undefined, width: ImageSlot) {
-  const url = assetUrl(path);
-  if (!url.includes('/storage/v1/object/public/product-images/')) return url;
-  const base = API_URL.replace(/\/$/, '');
-  return `${base}/media?src=${encodeURIComponent(url)}&w=${width}`;
+export function imageUrl(path: string | null | undefined, _width?: ImageSlot) {
+  return assetUrl(path);
 }
 
 export function formatMoney(value: number | string) {

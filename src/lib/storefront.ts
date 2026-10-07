@@ -14,7 +14,7 @@ export type StorefrontBootstrap = {
   categories: Category[];
 };
 
-const STORAGE_KEY = 'clinch:storefront';
+const STORAGE_KEY = 'clinch:storefront:v3';
 export const STOREFRONT_STALE_MS = 2 * 60_000;
 export const storefrontQueryKey = ['storefront'] as const;
 export const featuredQueryKey = ['products', 'featured'] as const;
@@ -24,9 +24,17 @@ type StoredBootstrap = {
   savedAt: number;
 };
 
+function storageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export function readStorefrontCache(): StoredBootstrap | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredBootstrap;
     if (!parsed?.data?.featured || !parsed?.data?.products) return null;
@@ -39,7 +47,8 @@ export function readStorefrontCache(): StoredBootstrap | null {
 export function writeStorefrontCache(data: StorefrontBootstrap) {
   try {
     const payload: StoredBootstrap = { data, savedAt: Date.now() };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    sessionStorage.removeItem('clinch:storefront');
   } catch {
     /* ignore quota / private mode */
   }
@@ -47,11 +56,24 @@ export function writeStorefrontCache(data: StorefrontBootstrap) {
 
 export function clearStorefrontCache() {
   try {
-    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem('clinch:storefront');
   } catch {
     /* ignore */
   }
   queryClient.removeQueries({ queryKey: storefrontQueryKey });
+}
+
+export function findStorefrontProduct(slug: string | undefined): Product | undefined {
+  if (!slug) return undefined;
+  const data =
+    queryClient.getQueryData<StorefrontBootstrap>(storefrontQueryKey) ??
+    readStorefrontCache()?.data;
+  if (!data) return undefined;
+  return (
+    data.products.items.find((product) => product.slug === slug) ??
+    data.featured.find((product) => product.slug === slug)
+  );
 }
 
 export async function fetchStorefrontBootstrap(): Promise<StorefrontBootstrap> {
@@ -79,7 +101,12 @@ export function storefrontQueryOptions() {
     queryFn: fetchStorefrontBootstrap,
     staleTime: STOREFRONT_STALE_MS,
     gcTime: 30 * 60_000,
-    placeholderData: cached?.data,
+    ...(cached
+      ? {
+          initialData: cached.data,
+          initialDataUpdatedAt: cached.savedAt,
+        }
+      : {}),
   };
 }
 

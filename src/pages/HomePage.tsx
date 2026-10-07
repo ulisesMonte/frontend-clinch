@@ -22,6 +22,19 @@ export function HomePage() {
     return () => window.clearTimeout(t);
   }, [location.hash, data]);
 
+  useEffect(() => {
+    const run = () => {
+      void import('./CatalogPage');
+      void import('./ProductPage');
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run);
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 400);
+    return () => window.clearTimeout(id);
+  }, []);
+
   return (
     <>
       <section className="hero-plane" aria-label="Inicio">

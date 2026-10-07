@@ -49,9 +49,9 @@ export function ProductRail({
         ‹
       </button>
       <div className="catalog-rail" ref={scrollerRef}>
-        {products.map((product) => (
+        {products.map((product, index) => (
           <div key={product.id} className="catalog-rail-slide">
-            <ProductCard product={product} />
+            <ProductCard product={product} priority={index < 4} />
           </div>
         ))}
       </div>

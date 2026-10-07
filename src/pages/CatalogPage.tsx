@@ -95,12 +95,11 @@ export function CatalogPage() {
     [cachedItems, categories, category, q],
   );
 
-  // Bootstrap is one page. A full page may hide older products, so a text
-  // search still asks the API. Category chips use the list already on screen.
-  const cacheMayBePartial =
-    cachedItems.length > 0 &&
-    cachedItems.length >= (storefront.data?.products.limit ?? cachedItems.length);
-  const needsNetwork = Boolean(q) && cacheMayBePartial;
+  // The bootstrap list is the catalog. A network call only fills a gap
+  // when that list was truncated, and it never replaces cards with skeletons.
+  const catalogTotal = storefront.data?.products.total ?? 0;
+  const cacheMayBePartial = catalogTotal > cachedItems.length;
+  const needsNetwork = cacheMayBePartial && Boolean(q || category);
 
   const filteredProducts = useQuery({
     queryKey: ['products', q, category],
@@ -134,7 +133,11 @@ export function CatalogPage() {
   const items = needsNetwork
     ? (filteredProducts.data?.items ?? localItems)
     : localItems;
-  const isLoading = storefront.isPending && !cachedItems.length && !items.length;
+  const waitingForFilter =
+    needsNetwork && !filteredProducts.data && filteredProducts.isPending;
+  const isLoading =
+    (storefront.isPending && !cachedItems.length && !items.length) ||
+    (waitingForFilter && !items.length);
 
   const guantes = rootCategories.find((c) => c.slug === 'guantes');
   const gloveSubs = guantes?.children ?? [];
@@ -268,12 +271,20 @@ export function CatalogPage() {
                     <h2 id={`subcat-${section.slug}`}>{section.name}</h2>
                     {section.description ? <p>{section.description}</p> : null}
                   </header>,
-                  ...sectionProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                  ...sectionProducts.map((product, index) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      priority={index < 4}
+                    />
                   )),
                 ])
-              : items.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+              : items.map((product, index) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    priority={index < 4}
+                  />
                 ))}
           </div>
         ) : (

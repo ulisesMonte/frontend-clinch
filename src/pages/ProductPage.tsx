@@ -1,25 +1,35 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, imageUrl } from '../lib/api';
 import type { Product } from '../lib/types';
 import { PriceBlock } from '../lib/pricing';
+import { findStorefrontProduct } from '../lib/storefront';
 import { whatsappConsultUrl } from '../lib/whatsapp';
 
 export function ProductPage() {
   const { slug } = useParams();
   const [activeImage, setActiveImage] = useState(0);
+  const cached = findStorefrontProduct(slug);
 
-  const { data: product, isLoading } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ['product', slug],
     queryFn: async () =>
       (await api.get<Product>(`/products/slug/${slug}`)).data,
+    enabled: Boolean(slug),
+    placeholderData: cached,
   });
+
+  const product = data ?? cached;
+
+  useEffect(() => {
+    setActiveImage(0);
+  }, [slug]);
 
   const images = useMemo(() => product?.images ?? [], [product?.images]);
   const current = images[Math.min(activeImage, Math.max(images.length - 1, 0))];
 
-  if (isLoading) {
+  if (!product && isPending) {
     return (
       <div className="container section">
         <div className="product-hero">
@@ -61,7 +71,10 @@ export function ProductPage() {
                 src={imageUrl(current?.url, 1280)}
                 alt={current?.alt || product.name}
                 key={current?.id ?? 'fallback'}
+                width={1280}
+                height={1280}
                 decoding="async"
+                fetchPriority="high"
               />
             </div>
             {images.length > 1 && (
@@ -80,7 +93,14 @@ export function ProductPage() {
                     aria-label={`Foto ${index + 1}`}
                     aria-pressed={index === activeImage}
                   >
-                    <img src={imageUrl(img.url, 320)} alt="" decoding="async" />
+                    <img
+                      src={imageUrl(img.url, 320)}
+                      alt=""
+                      width={320}
+                      height={320}
+                      decoding="async"
+                      loading={index < 4 ? 'eager' : 'lazy'}
+                    />
                   </button>
                 ))}
               </div>

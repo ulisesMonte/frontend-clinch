@@ -1244,7 +1244,6 @@ h3 {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  animation: riseIn 0.5s var(--ease) both;
   transition: transform 0.3s var(--ease), border-color 0.25s ease, box-shadow 0.3s ease;
 }
 
