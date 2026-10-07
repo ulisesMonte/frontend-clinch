@@ -15,8 +15,8 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         <img
           src={assetUrl(product.images[0]?.url)}
           alt={product.name}
-          loading={index < 4 ? 'eager' : 'lazy'}
-          fetchPriority={index === 0 ? 'high' : undefined}
+          loading={index === 0 ? 'eager' : 'lazy'}
+          fetchPriority={index === 0 ? 'high' : 'low'}
           decoding="async"
         />
         {product.featured ? (

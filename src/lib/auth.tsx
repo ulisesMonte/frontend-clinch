@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from './api';
 import type { User } from './types';
 
@@ -34,14 +35,20 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function needsSessionCheck(pathname: string) {
+  return pathname.startsWith('/admin') || pathname.startsWith('/clinch/naz');
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() =>
+    needsSessionCheck(window.location.pathname),
+  );
 
   const refreshMe = useCallback(async () => {
-    // Always hit /auth/me. The session cookie is httpOnly on the API host
-    // (often another origin: Vercel → Render), so document.cookie cannot see it.
-    // hasSessionFlag() is only a same-origin hint and must not gate restore.
+    // The session cookie is httpOnly on the API host (often another origin),
+    // so document.cookie cannot see it. Only call this from admin routes.
     try {
       const { data } = await api.get<User>('/auth/me');
       setUser(data);
@@ -51,8 +58,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refreshMe().finally(() => setLoading(false));
-  }, [refreshMe]);
+    if (!needsSessionCheck(location.pathname)) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    void refreshMe().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshMe, location.pathname]);
 
   const login = useCallback(async (email: string, password: string) => {
     const { data } = await api.post<OtpChallenge>('/auth/login', {

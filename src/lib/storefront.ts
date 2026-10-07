@@ -15,7 +15,7 @@ export type StorefrontBootstrap = {
 };
 
 const STORAGE_KEY = 'clinch:storefront';
-export const STOREFRONT_STALE_MS = 30_000;
+export const STOREFRONT_STALE_MS = 2 * 60_000;
 export const storefrontQueryKey = ['storefront'] as const;
 export const featuredQueryKey = ['products', 'featured'] as const;
 
@@ -80,8 +80,6 @@ export function storefrontQueryOptions() {
     staleTime: STOREFRONT_STALE_MS,
     gcTime: 30 * 60_000,
     placeholderData: cached?.data,
-    refetchOnMount: 'always' as const,
-    refetchOnWindowFocus: true,
   };
 }
 
