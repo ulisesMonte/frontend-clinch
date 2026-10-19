@@ -6,12 +6,14 @@ type ProductRailProps = {
   products: Product[];
   emptyMessage?: string;
   loading?: boolean;
+  showFeaturedTag?: boolean;
 };
 
 export function ProductRail({
   products,
   emptyMessage = 'Todavía no hay productos en esta sección.',
   loading = false,
+  showFeaturedTag = true,
 }: ProductRailProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -51,7 +53,11 @@ export function ProductRail({
       <div className="catalog-rail" ref={scrollerRef}>
         {products.map((product, index) => (
           <div key={product.id} className="catalog-rail-slide">
-            <ProductCard product={product} priority={index < 4} />
+            <ProductCard
+              product={product}
+              priority={index < 4}
+              showFeaturedTag={showFeaturedTag}
+            />
           </div>
         ))}
       </div>

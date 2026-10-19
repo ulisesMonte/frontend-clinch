@@ -7,9 +7,15 @@ type ProductCardProps = {
   product: Product;
   /** First cards on screen load immediately; the rest wait until they scroll in. */
   priority?: boolean;
+  /** Home rails already name the section, so the badge is noise there. */
+  showFeaturedTag?: boolean;
 };
 
-export function ProductCard({ product, priority = false }: ProductCardProps) {
+export function ProductCard({
+  product,
+  priority = false,
+  showFeaturedTag = true,
+}: ProductCardProps) {
   return (
     <article className="product-card">
       <Link to={`/producto/${product.slug}`} className="product-card-media">
@@ -22,7 +28,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           loading={priority ? 'eager' : 'lazy'}
           fetchPriority={priority ? 'high' : 'low'}
         />
-        {product.featured ? (
+        {showFeaturedTag && product.featured ? (
           <span className="product-card-tag">Destacado</span>
         ) : null}
       </Link>

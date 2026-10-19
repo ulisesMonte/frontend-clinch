@@ -154,6 +154,7 @@ function CatalogBlock({
             products={products}
             loading={loading}
             emptyMessage={emptyMessage}
+            showFeaturedTag={false}
           />
         </div>
       </div>
