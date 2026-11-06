@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, imageUrl } from '../lib/api';
-import type { Category, Product } from '../lib/types';
+import type { Category, Product, ProductImage } from '../lib/types';
 import { useAuth } from '../lib/auth';
 import { invalidateStorefront } from '../lib/storefront';
 import { PriceBlock } from '../lib/pricing';
@@ -119,10 +119,54 @@ function apiErrorMessage(err: unknown, fallback = 'Error') {
   return fallback;
 }
 
-async function uploadProductImage(productId: string, file: File) {
+async function shrinkForUpload(file: File): Promise<File> {
+  if (file.size < 400_000) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 900_000) {
+      bitmap.close();
+      return file;
+    }
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/webp', 0.8);
+    });
+    const encoded =
+      blob && blob.size < file.size
+        ? blob
+        : await new Promise<Blob | null>((resolve) => {
+            canvas.toBlob(resolve, 'image/jpeg', 0.82);
+          });
+    if (!encoded || encoded.size >= file.size) return file;
+    const ext = encoded.type === 'image/webp' ? 'webp' : 'jpg';
+    const name = file.name.replace(/\.[^.]+$/, '') + `.${ext}`;
+    return new File([encoded], name, { type: encoded.type });
+  } catch {
+    return file;
+  }
+}
+
+async function uploadProductImages(productId: string, files: File[]) {
+  const prepared = await Promise.all(files.map(shrinkForUpload));
   const fd = new FormData();
-  fd.append('file', file);
-  await api.post(`/products/${productId}/images`, fd);
+  for (const file of prepared) fd.append('files', file);
+  const { data } = await api.post<{ images: ProductImage[]; failed: string[] }>(
+    `/products/${productId}/images/batch`,
+    fd,
+  );
+  return data;
 }
 
 export function AdminProductsPage() {
@@ -130,9 +174,12 @@ export function AdminProductsPage() {
   const [error, setError] = useState('');
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [creating, setCreating] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editError, setEditError] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [addingImages, setAddingImages] = useState('');
+  const [editPreviews, setEditPreviews] = useState<PendingImage[]>([]);
 
   const { data: products, isLoading: loadingProducts } = useQuery({
     queryKey: ['admin-products'],
@@ -147,16 +194,6 @@ export function AdminProductsPage() {
 
   const editing = products?.find((p) => p.id === editingId) ?? null;
 
-  const uploadImage = useMutation({
-    mutationFn: async ({ id, file }: { id: string; file: File }) => {
-      await uploadProductImage(id, file);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-products'] });
-      invalidateStorefront();
-    },
-  });
-
   const removeImage = useMutation({
     mutationFn: async ({
       productId,
@@ -167,8 +204,28 @@ export function AdminProductsPage() {
     }) => {
       await api.delete(`/products/${productId}/images/${imageId}`);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-products'] });
+    onMutate: async ({ productId, imageId }) => {
+      await qc.cancelQueries({ queryKey: ['admin-products'] });
+      const previous = qc.getQueryData<Product[]>(['admin-products']);
+      qc.setQueryData<Product[]>(['admin-products'], (list) =>
+        list?.map((product) =>
+          product.id === productId
+            ? {
+                ...product,
+                images: product.images.filter((image) => image.id !== imageId),
+              }
+            : product,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(['admin-products'], context.previous);
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-products'] });
       invalidateStorefront();
     },
   });
@@ -256,20 +313,18 @@ export function AdminProductsPage() {
         active: true,
       });
 
-      try {
-        for (const img of pendingImages) {
-          await uploadProductImage(created.id, img.file);
-        }
-      } catch (imgErr) {
-        setError(
-          apiErrorMessage(
-            imgErr,
-            'Producto creado, pero falló la subida de imágenes al storage',
-          ),
+      if (pendingImages.length) {
+        setUploadProgress(`Subiendo ${pendingImages.length} fotos…`);
+        const result = await uploadProductImages(
+          created.id,
+          pendingImages.map((img) => img.file),
         );
-        await qc.invalidateQueries({ queryKey: ['admin-products'] });
-        invalidateStorefront();
-        return;
+        if (result.failed.length) {
+          setError(`Producto creado, pero falló la subida: ${result.failed.join(', ')}`);
+          await qc.invalidateQueries({ queryKey: ['admin-products'] });
+          invalidateStorefront();
+          return;
+        }
       }
 
       clearPendingImages();
@@ -280,6 +335,7 @@ export function AdminProductsPage() {
       setError(apiErrorMessage(err, 'No se pudo crear el producto'));
     } finally {
       setCreating(false);
+      setUploadProgress('');
     }
   }
 
@@ -410,7 +466,7 @@ export function AdminProductsPage() {
         </label>
         {error && <p className="error">{error}</p>}
         <button className="btn btn-primary" type="submit" disabled={creating}>
-          {creating ? 'Creando…' : 'Crear producto'}
+          {creating ? uploadProgress || 'Creando…' : 'Crear producto'}
         </button>
       </form>
 
@@ -428,6 +484,10 @@ export function AdminProductsPage() {
               onClick={() => {
                 setEditingId(null);
                 setEditError('');
+                setEditPreviews((prev) => {
+                  prev.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+                  return [];
+                });
               }}
             >
               Cerrar
@@ -521,30 +581,76 @@ export function AdminProductsPage() {
           <div className="admin-images-field admin-edit-panel">
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <strong>Imágenes ({editing.images.length})</strong>
-              <label className="btn btn-ghost" style={{ cursor: 'pointer' }}>
-                Agregar
+              <label
+                className="btn btn-ghost"
+                style={{
+                  cursor: addingImages ? 'progress' : 'pointer',
+                  opacity: addingImages ? 0.7 : 1,
+                }}
+              >
+                {addingImages || 'Agregar'}
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   multiple
                   hidden
+                  disabled={Boolean(addingImages)}
                   onChange={(e) => {
-                    const files = e.target.files;
-                    if (!files?.length) return;
+                    const files = Array.from(e.target.files ?? []);
+                    e.target.value = '';
+                    if (!files.length || !editing) return;
+                    const productId = editing.id;
+                    const previews: PendingImage[] = files.map((file) => ({
+                      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+                      file,
+                      previewUrl: URL.createObjectURL(file),
+                    }));
+                    setEditPreviews((prev) => [...prev, ...previews]);
+                    setEditError('');
+                    setAddingImages('Subiendo…');
                     void (async () => {
-                      for (const file of Array.from(files)) {
-                        await uploadImage.mutateAsync({
-                          id: editing.id,
-                          file,
+                      try {
+                        const result = await uploadProductImages(
+                          productId,
+                          previews.map((img) => img.file),
+                        );
+                        if (result.images.length) {
+                          qc.setQueryData<Product[]>(['admin-products'], (list) =>
+                            list?.map((product) =>
+                              product.id === productId
+                                ? {
+                                    ...product,
+                                    images: [...product.images, ...result.images],
+                                  }
+                                : product,
+                            ),
+                          );
+                        }
+                        if (result.failed.length) {
+                          setEditError(
+                            `No se pudieron subir: ${result.failed.join(', ')}`,
+                          );
+                        }
+                      } catch (err) {
+                        setEditError(apiErrorMessage(err, 'No se pudieron subir las fotos'));
+                      } finally {
+                        setEditPreviews((prev) => {
+                          const ids = new Set(previews.map((img) => img.id));
+                          prev.forEach((img) => {
+                            if (ids.has(img.id)) URL.revokeObjectURL(img.previewUrl);
+                          });
+                          return prev.filter((img) => !ids.has(img.id));
                         });
+                        setAddingImages('');
+                        void qc.invalidateQueries({ queryKey: ['admin-products'] });
+                        invalidateStorefront();
                       }
                     })();
-                    e.target.value = '';
                   }}
                 />
               </label>
             </div>
-            {editing.images.length > 0 ? (
+            {editing.images.length > 0 || editPreviews.length > 0 ? (
               <div className="admin-images-grid">
                 {editing.images.map((img, index) => (
                   <div key={img.id} className="admin-image-thumb">
@@ -556,13 +662,8 @@ export function AdminProductsPage() {
                       type="button"
                       className="admin-image-remove"
                       aria-label="Eliminar imagen"
-                      disabled={removeImage.isPending}
                       onClick={() => {
-                        if (
-                          !window.confirm('¿Eliminar esta imagen?')
-                        ) {
-                          return;
-                        }
+                        if (!window.confirm('¿Eliminar esta imagen?')) return;
                         removeImage.mutate({
                           productId: editing.id,
                           imageId: img.id,
@@ -571,6 +672,12 @@ export function AdminProductsPage() {
                     >
                       ×
                     </button>
+                  </div>
+                ))}
+                {editPreviews.map((img) => (
+                  <div key={img.id} className="admin-image-thumb" style={{ opacity: 0.65 }}>
+                    <img src={img.previewUrl} alt={img.file.name} />
+                    <span className="admin-image-badge">Subiendo</span>
                   </div>
                 ))}
               </div>

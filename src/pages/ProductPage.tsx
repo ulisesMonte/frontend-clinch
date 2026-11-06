@@ -7,6 +7,52 @@ import { PriceBlock } from '../lib/pricing';
 import { findStorefrontProduct } from '../lib/storefront';
 import { whatsappConsultUrl } from '../lib/whatsapp';
 
+function HeroPhoto({ url, alt }: { url?: string; alt: string }) {
+  const small = imageUrl(url, 320);
+  const mid = imageUrl(url, 640);
+  const large = imageUrl(url, 1280);
+  const stored = /\/(320|640|1280)\.webp$/.test(large.split('?')[0]);
+  const [src, setSrc] = useState(stored ? small : large);
+
+  useEffect(() => {
+    const stored = /\/(320|640|1280)\.webp$/.test(large.split('?')[0]);
+    if (!stored) {
+      setSrc(large);
+      return;
+    }
+    const order = [small, mid, large].filter(
+      (item, index, all) => all.indexOf(item) === index,
+    );
+    let reached = 0;
+    let cancel = false;
+    setSrc(order[0]);
+    order.forEach((next, index) => {
+      if (index === 0) return;
+      const img = new Image();
+      img.onload = () => {
+        if (cancel || index < reached) return;
+        reached = index;
+        setSrc(next);
+      };
+      img.src = next;
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [small, mid, large]);
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={1280}
+      height={1280}
+      decoding="async"
+      fetchPriority="high"
+    />
+  );
+}
+
 export function ProductPage() {
   const { slug } = useParams();
   const [activeImage, setActiveImage] = useState(0);
@@ -67,14 +113,10 @@ export function ProductPage() {
         <div className="product-hero">
           <div className="product-gallery">
             <div className="product-hero-media">
-              <img
-                src={imageUrl(current?.url, 1280)}
+              <HeroPhoto
+                url={current?.url}
                 alt={current?.alt || product.name}
                 key={current?.id ?? 'fallback'}
-                width={1280}
-                height={1280}
-                decoding="async"
-                fetchPriority="high"
               />
             </div>
             {images.length > 1 && (

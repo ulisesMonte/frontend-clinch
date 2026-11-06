@@ -35,11 +35,48 @@ export function assetUrl(path?: string | null) {
   return path;
 }
 
-/** Kept so call sites can name the slot. Photos are served from storage, not resized by the API. */
+/** 1280 is the file stored in the database. 320 and 640 live in the same folder. */
 export type ImageSlot = 320 | 640 | 1280;
 
-export function imageUrl(path: string | null | undefined, _width?: ImageSlot) {
-  return assetUrl(path);
+const STORAGE_PREFIX = '/storage/v1/object/public/product-images/';
+const VARIANT_FILE = /\/(320|640|1280)\.webp$/;
+
+function storagePhotoUrl(url: string): URL | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return null;
+    if (!parsed.pathname.startsWith(STORAGE_PREFIX)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Swap the size suffix when this photo was saved as 320/640/1280. */
+function variantUrl(url: string, width: ImageSlot) {
+  const [path, query] = url.split('?');
+  if (!VARIANT_FILE.test(path)) return null;
+  const target = width >= 1280 ? 1280 : width;
+  const sized = path.replace(VARIANT_FILE, `/${target}.webp`);
+  return query ? `${sized}?${query}` : sized;
+}
+
+/**
+ * New photos point at the stored WebP of the right size.
+ * Older photos still ask /api/media to resize on the way out.
+ */
+export function imageUrl(path: string | null | undefined, width?: ImageSlot) {
+  const url = assetUrl(path);
+  if (!path) return url;
+  if (width) {
+    const sized = variantUrl(url, width);
+    if (sized) return sized;
+  }
+  if (!width || width >= 1280) return url;
+  if (!storagePhotoUrl(url)) return url;
+
+  const params = new URLSearchParams({ src: url, w: String(width) });
+  return `${API_URL.replace(/\/$/, '')}/media?${params.toString()}`;
 }
 
 export function formatMoney(value: number | string) {
